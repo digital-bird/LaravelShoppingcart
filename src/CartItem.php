@@ -6,6 +6,7 @@ use Gloudemans\Shoppingcart\Traits\CartHelper;
 use Illuminate\Contracts\Support\Arrayable;
 use Gloudemans\Shoppingcart\Contracts\Buyable;
 use Illuminate\Contracts\Support\Jsonable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 
 class CartItem implements Arrayable, Jsonable
@@ -117,7 +118,7 @@ class CartItem implements Arrayable, Jsonable
      * @param string $thousandSeperator
      * @return string
      */
-    public function price($decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    public function price($decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
         $decimals = is_null($decimals) ? config('cart.format.price_ex_tax_decimals') : $decimals;
 
@@ -132,12 +133,12 @@ class CartItem implements Arrayable, Jsonable
      * @param string $thousandSeperator
      * @return string
      */
-    public function priceTax($decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    public function priceTax($decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
         if ($this->taxIncluded === true) {
             $priceTax = $this->price;
         } else {
-            $priceTax = $this->price + $this->tax;
+            $priceTax = $this->price + $this->getRawTax();
         }
 
         $decimals = is_null($decimals) ? config('cart.format.price_inc_tax_decimals') : $decimals;
@@ -154,7 +155,7 @@ class CartItem implements Arrayable, Jsonable
      * @param string $thousandSeperator
      * @return string
      */
-    public function subtotal($decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    public function subtotal($decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
         $subtotal = $this->qty * $this->price;
         $decimals = is_null($decimals) ? config('cart.format.subtotal_ex_tax_decimals') : $decimals;
@@ -171,13 +172,9 @@ class CartItem implements Arrayable, Jsonable
      * @param string $thousandSeperator
      * @return string
      */
-    public function subtotalTax($decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    public function subtotalTax($decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
-        if ($this->taxIncluded === true) {
-            $subtotal = $this->subtotal;
-        } else {
-            $subtotal = $this->subtotal + $this->taxTotal;
-        }
+        $subtotal = $this->getRawTotal();
 
         $decimals = is_null($decimals) ? config('cart.format.subtotal_inc_tax_decimals') : $decimals;
 
@@ -193,9 +190,9 @@ class CartItem implements Arrayable, Jsonable
      * @param string $thousandSeperator
      * @return string
      */
-    public function total($decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    public function total($decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
-        $total = $this->subtotalTax;
+        $total = $this->getRawTotal();
         $decimals = is_null($decimals) ? config('cart.format.total_decimals') : $decimals;
 
         return $this->numberFormat($total, $decimals, $decimalPoint, $thousandSeperator);
@@ -209,7 +206,7 @@ class CartItem implements Arrayable, Jsonable
      * @param string $thousandSeperator
      * @return string
      */
-    public function tax($decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    public function tax($decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
         if ($this->taxIncluded === true) {
             $tax = $this->price / (1 + $this->taxRate);
@@ -230,12 +227,60 @@ class CartItem implements Arrayable, Jsonable
      * @param string $thousandSeperator
      * @return string
      */
-    public function taxTotal($decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    public function taxTotal($decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
-        $taxTotal = $this->tax * $this->qty;
+        $taxTotal = $this->getRawTaxTotal();
         $decimals = is_null($decimals) ? config('cart.format.tax_total_decimals') : $decimals;
 
         return $this->numberFormat($taxTotal, $decimals, $decimalPoint, $thousandSeperator);
+    }
+
+    /**
+     * Returns the raw (unformatted) unit tax as a float.
+     *
+     * @return float
+     */
+    public function getRawTax(): float
+    {
+        if ($this->taxIncluded === true) {
+            return $this->price / (1 + $this->taxRate);
+        }
+
+        return $this->price * ($this->taxRate / 100);
+    }
+
+    /**
+     * Returns the raw (unformatted) subtotal (qty * price) as a float.
+     *
+     * @return float
+     */
+    public function getRawSubtotal(): float
+    {
+        return $this->qty * $this->price;
+    }
+
+    /**
+     * Returns the raw (unformatted) total tax for this line as a float.
+     *
+     * @return float
+     */
+    public function getRawTaxTotal(): float
+    {
+        return $this->getRawTax() * $this->qty;
+    }
+
+    /**
+     * Returns the raw (unformatted) line total as a float.
+     *
+     * @return float
+     */
+    public function getRawTotal(): float
+    {
+        if ($this->taxIncluded === true) {
+            return $this->getRawSubtotal();
+        }
+
+        return $this->getRawSubtotal() + $this->getRawTaxTotal();
     }
 
     /**
@@ -244,7 +289,7 @@ class CartItem implements Arrayable, Jsonable
      * @param $qty
      * @return $this
      */
-    public function setQuantity($qty)
+    public function setQuantity($qty): self
     {
         if(empty($qty) || ! is_numeric($qty))
             throw new \InvalidArgumentException('Please supply a valid quantity.');
@@ -260,7 +305,7 @@ class CartItem implements Arrayable, Jsonable
      * @param \Gloudemans\Shoppingcart\Contracts\Buyable $item
      * @return void
      */
-    public function updateFromBuyable(Buyable $item)
+    public function updateFromBuyable(Buyable $item): void
     {
         $this->id       = $item->getBuyableIdentifier($this->options);
         $this->name     = $item->getBuyableDescription($this->options);
@@ -273,13 +318,13 @@ class CartItem implements Arrayable, Jsonable
      * @param array $attributes
      * @return void
      */
-    public function updateFromArray(array $attributes)
+    public function updateFromArray(array $attributes): void
     {
-        $this->id       = array_get($attributes, 'id', $this->id);
-        $this->qty      = array_get($attributes, 'qty', $this->qty);
-        $this->name     = array_get($attributes, 'name', $this->name);
-        $this->price    = array_get($attributes, 'price', $this->price);
-        $this->options  = new CartItemOptions(array_get($attributes, 'options', $this->options));
+        $this->id       = Arr::get($attributes, 'id', $this->id);
+        $this->qty      = Arr::get($attributes, 'qty', $this->qty);
+        $this->name     = Arr::get($attributes, 'name', $this->name);
+        $this->price    = Arr::get($attributes, 'price', $this->price);
+        $this->options  = new CartItemOptions(Arr::get($attributes, 'options', $this->options));
 
         $this->rowId = $this->generateRowId($this->id, $this->options->all());
     }
@@ -290,7 +335,7 @@ class CartItem implements Arrayable, Jsonable
      * @param mixed $model
      * @return \Gloudemans\Shoppingcart\CartItem
      */
-    public function associate($model)
+    public function associate($model): self
     {
         $this->associatedModel = is_string($model) ? $model : get_class($model);
 
@@ -303,7 +348,7 @@ class CartItem implements Arrayable, Jsonable
      * @param int|float $taxRate
      * @return \Gloudemans\Shoppingcart\CartItem
      */
-    public function setTaxRate($taxRate)
+    public function setTaxRate($taxRate): self
     {
         $this->taxRate = $taxRate;
 
@@ -316,7 +361,7 @@ class CartItem implements Arrayable, Jsonable
      * @param bool $taxIncluded
      * @return \Gloudemans\Shoppingcart\CartItem
      */
-    public function setTaxIncluded(bool $taxIncluded)
+    public function setTaxIncluded(bool $taxIncluded): self
     {
         $this->taxIncluded = $taxIncluded;
 
@@ -329,7 +374,7 @@ class CartItem implements Arrayable, Jsonable
      * @param bool $bool
      * @return \Gloudemans\Shoppingcart\CartItem
      */
-    public function setSaved($bool)
+    public function setSaved($bool): self
     {
         $this->isSaved = $bool;
 
@@ -342,7 +387,7 @@ class CartItem implements Arrayable, Jsonable
      * @param string $attribute
      * @return mixed
      */
-    public function __get($attribute)
+    public function __get($attribute): mixed
     {
         if (property_exists($this, $attribute)) {
             return $this->{$attribute};
@@ -386,7 +431,7 @@ class CartItem implements Arrayable, Jsonable
      * @param array                                      $options
      * @return \Gloudemans\Shoppingcart\CartItem
      */
-    public static function fromBuyable(Buyable $item, array $options = [])
+    public static function fromBuyable(Buyable $item, array $options = []): self
     {
         return new self($item->getBuyableIdentifier($options), $item->getBuyableDescription($options), $item->getBuyablePrice($options), $options);
     }
@@ -397,9 +442,9 @@ class CartItem implements Arrayable, Jsonable
      * @param array $attributes
      * @return \Gloudemans\Shoppingcart\CartItem
      */
-    public static function fromArray(array $attributes)
+    public static function fromArray(array $attributes): self
     {
-        $options = array_get($attributes, 'options', []);
+        $options = Arr::get($attributes, 'options', []);
 
         return new self($attributes['id'], $attributes['name'], $attributes['price'], $options);
     }
@@ -413,7 +458,7 @@ class CartItem implements Arrayable, Jsonable
      * @param array      $options
      * @return \Gloudemans\Shoppingcart\CartItem
      */
-    public static function fromAttributes($id, $name, $price, array $options = [])
+    public static function fromAttributes($id, $name, $price, array $options = []): self
     {
         return new self($id, $name, $price, $options);
     }
@@ -425,7 +470,7 @@ class CartItem implements Arrayable, Jsonable
      * @param array  $options
      * @return string
      */
-    protected function generateRowId($id, array $options)
+    protected function generateRowId($id, array $options): string
     {
         ksort($options);
 
@@ -443,7 +488,7 @@ class CartItem implements Arrayable, Jsonable
      *
      * @return array
      */
-    public function toArray()
+    public function toArray(): array
     {
         return [
             'rowId'    => $this->rowId,
@@ -464,7 +509,7 @@ class CartItem implements Arrayable, Jsonable
      * @param int $options
      * @return string
      */
-    public function toJson($options = 0)
+    public function toJson($options = 0): string
     {
         return json_encode($this->toArray(), $options);
     }

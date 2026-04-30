@@ -66,7 +66,7 @@ class Cart
      * @param string|null $instance
      * @return \Gloudemans\Shoppingcart\Cart
      */
-    public function instance($instance = null)
+    public function instance($instance = null): self
     {
         $instance = $instance ?: self::DEFAULT_INSTANCE;
 
@@ -80,7 +80,7 @@ class Cart
      *
      * @return string
      */
-    public function currentInstance()
+    public function currentInstance(): string
     {
         return str_replace('cart.', '', $this->instance);
     }
@@ -144,7 +144,7 @@ class Cart
      * @param array $eventOptions
      * @return CartItem|void
      */
-    public function update($rowId, $qty, array $eventOptions = [])
+    public function update($rowId, $qty, array $eventOptions = []): ?CartItem
     {
         $cartItem = $this->get($rowId);
 
@@ -178,7 +178,7 @@ class Cart
         if ($cartItem->qty <= 0) {
             $this->remove($cartItem->rowId);
 
-            return;
+            return null;
         }
 
         $this->session->put($this->instance, $this->toArray());
@@ -202,7 +202,7 @@ class Cart
      * @param array $eventOptions
      * @return void
      */
-    public function remove($rowId, array $eventOptions = [])
+    public function remove($rowId, array $eventOptions = []): void
     {
         $cartItem = $this->get($rowId);
 
@@ -230,7 +230,7 @@ class Cart
      * @param string $rowId
      * @return \Gloudemans\Shoppingcart\CartItem
      */
-    public function get($rowId)
+    public function get($rowId): CartItem
     {
         $content = $this->getContent();
 
@@ -246,7 +246,7 @@ class Cart
      *
      * @return void
      */
-    public function destroy()
+    public function destroy(): void
     {
         $this->session->remove($this->instance);
     }
@@ -256,7 +256,7 @@ class Cart
      *
      * @return \Illuminate\Support\Collection
      */
-    public function content()
+    public function content(): Collection
     {
         return $this->getContent();
     }
@@ -266,7 +266,7 @@ class Cart
      *
      * @return int|float
      */
-    public function count()
+    public function count(): int|float
     {
         $content = $this->getContent();
 
@@ -281,18 +281,16 @@ class Cart
      * @param string $thousandSeperator
      * @return string
      */
-    public function total($decimals = null, $decimalPoint = null, $thousandSeperator = null, $withFees = true)
+    public function total($decimals = null, $decimalPoint = null, $thousandSeperator = null, $withFees = true): string
     {
         $content = $this->getContent();
 
         $total = $content->reduce(function ($total, CartItem $cartItem) {
-            return $total + ($cartItem->total);
+            return $total + $cartItem->getRawTotal();
         }, 0);
 
         if ($withFees === true) {
-            $fees = $this->feeTotal(null, null, null, true);
-
-            $total = $total + $fees;
+            $total = $total + $this->getRawFeeTotal(true);
         }
 
         $decimals = is_null($decimals) ? config('cart.format.total_decimals') : $decimals;
@@ -308,18 +306,16 @@ class Cart
      * @param string $thousandSeperator
      * @return float
      */
-    public function tax($decimals = null, $decimalPoint = null, $thousandSeperator = null, $withFees = true)
+    public function tax($decimals = null, $decimalPoint = null, $thousandSeperator = null, $withFees = true): string
     {
         $content = $this->getContent();
 
         $tax = $content->reduce(function ($tax, CartItem $cartItem) {
-            return $tax + ($cartItem->taxTotal);
+            return $tax + $cartItem->getRawTaxTotal();
         }, 0);
 
         if ($withFees === true) {
-            $fees = $this->feeTax();
-
-            $tax = $tax + floatval($fees);
+            $tax = $tax + $this->getRawFeeTax();
         }
 
         $decimals = is_null($decimals) ? config('cart.format.tax_decimals') : $decimals;
@@ -335,19 +331,50 @@ class Cart
      * @param string $thousandSeperator
      * @return float
      */
-    public function feeTax($decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    public function feeTax($decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
-        $content = $this->getContent();
-
-        $tax = 0;
-
-        foreach ($this->getFees() as $fee) {
-            $tax += $fee->tax;
-        }
+        $tax = $this->getRawFeeTax();
 
         $decimals = is_null($decimals) ? config('cart.format.fee_total_tax_decimals') : $decimals;
 
         return $this->numberFormat($tax, $decimals, $decimalPoint, $thousandSeperator);
+    }
+
+    /**
+     * Get the raw (unformatted) total tax across all fees.
+     *
+     * @return float
+     */
+    protected function getRawFeeTax(): float
+    {
+        $tax = 0;
+
+        foreach ($this->getFees() as $fee) {
+            $tax += $fee->getRawTax();
+        }
+
+        return $tax;
+    }
+
+    /**
+     * Get the raw (unformatted) total of fees, optionally including tax.
+     *
+     * @param bool $withTax
+     * @return float
+     */
+    protected function getRawFeeTotal(bool $withTax = true): float
+    {
+        $feeTotal = 0;
+
+        foreach ($this->getFees() as $fee) {
+            $feeTotal += $fee->amount;
+
+            if ($withTax === true && $fee->taxRate > 0) {
+                $feeTotal += $fee->getRawTax();
+            }
+        }
+
+        return $feeTotal;
     }
 
     /**
@@ -358,12 +385,12 @@ class Cart
      * @param string $thousandSeperator
      * @return float
      */
-    public function subtotal($decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    public function subtotal($decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
         $content = $this->getContent();
 
         $subTotal = $content->reduce(function ($subTotal, CartItem $cartItem) {
-            return $subTotal + ($cartItem->subtotal);
+            return $subTotal + $cartItem->getRawSubtotal();
         }, 0);
 
         $decimals = is_null($decimals) ? config('cart.format.subtotal_ex_tax_decimals') : $decimals;
@@ -379,12 +406,12 @@ class Cart
      * @param string $thousandSeperator
      * @return float
      */
-    public function subtotalTax($decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    public function subtotalTax($decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
         $content = $this->getContent();
 
         $subTotal = $content->reduce(function ($subTotal, CartItem $cartItem) {
-            return $subTotal + ($cartItem->subtotalTax);
+            return $subTotal + $cartItem->getRawTotal();
         }, 0);
 
         $decimals = is_null($decimals) ? config('cart.format.subtotal_inc_tax_decimals') : $decimals;
@@ -398,7 +425,7 @@ class Cart
      * @param Closure $search
      * @return \Illuminate\Support\Collection
      */
-    public function search(Closure $search)
+    public function search(Closure $search): Collection
     {
         $content = $this->getContent();
 
@@ -412,7 +439,7 @@ class Cart
      * @param mixed  $model
      * @return void
      */
-    public function associate($rowId, $model)
+    public function associate($rowId, $model): void
     {
         if (
             is_string($model) === true &&
@@ -439,7 +466,7 @@ class Cart
      * @param int|float $taxRate
      * @return void
      */
-    public function setTax($rowId, $taxRate)
+    public function setTax($rowId, $taxRate): void
     {
         $cartItem = $this->get($rowId);
 
@@ -461,7 +488,7 @@ class Cart
      * @param array $eventOptions
      * @return void
      */
-    public function store($identifier, array $eventOptions = [])
+    public function store($identifier, array $eventOptions = []): void
     {
         // Remove any existing identifiers
         $recordExists = $this
@@ -509,7 +536,7 @@ class Cart
      * @param array $eventOptions
      * @return void
      */
-    public function restore($identifier, array $eventOptions = [])
+    public function restore($identifier, array $eventOptions = []): void
     {
         if ($this->storedCartWithIdentifierExists($identifier) === false) {
             return;
@@ -565,7 +592,7 @@ class Cart
      *
      * @return mixed
      */
-    public function getFee($name)
+    public function getFee($name): CartFee
     {
         return $this->fees->get($name, new CartFee(null, null));
     }
@@ -581,7 +608,7 @@ class Cart
      * @param            $taxRate
      * @param array      $options
      */
-    public function addFee($name, $amount, $taxRate = null, array $options = [])
+    public function addFee($name, $amount, $taxRate = null, array $options = []): void
     {
         $this->fees->put($name, new CartFee($amount, $taxRate, $options));
 
@@ -595,7 +622,7 @@ class Cart
      *
      * @param $name
      */
-    public function removeFee($name)
+    public function removeFee($name): void
     {
         $this->fees->forget($name);
 
@@ -605,7 +632,7 @@ class Cart
     /**
      * Removes all the fees set in the cart.
      */
-    public function removeFees()
+    public function removeFees(): void
     {
         $this->fees = new Collection;
 
@@ -620,19 +647,9 @@ class Cart
      *
      * @return string
      */
-    public function feeTotal($decimals = null, $decimalPoint = null, $thousandSeperator = null, $withTax = true)
+    public function feeTotal($decimals = null, $decimalPoint = null, $thousandSeperator = null, $withTax = true): string
     {
-        $feeTotal = 0;
-
-        foreach ($this->getFees() as $fee) {
-            $feeTotal += $fee->amount;
-
-            if ($withTax === true && $fee->taxRate > 0) {
-                $feeTotal += $fee->tax;
-            }
-        }
-
-        return $this->numberFormat($feeTotal, null, null, null);
+        return $this->numberFormat($this->getRawFeeTotal($withTax), null, null, null);
     }
 
     /**
@@ -640,7 +657,7 @@ class Cart
      *
      * @return mixed
      */
-    public function getFees()
+    public function getFees(): Collection
     {
         return $this->fees;
     }
@@ -651,7 +668,7 @@ class Cart
      * @param string $attribute
      * @return float|null
      */
-    public function __get($attribute)
+    public function __get($attribute): mixed
     {
         if ($attribute === 'total') {
             return $this->total();
@@ -687,7 +704,7 @@ class Cart
     /**
      * @return array
      */
-    public function toArray()
+    public function toArray(): array
     {
         return [
             'items' => $this->items,
@@ -699,7 +716,7 @@ class Cart
      * @param $array
      * @return $this
      */
-    public function fromArray($array)
+    public function fromArray($array): self
     {
         $this->items = $array['items'];
         $this->fees = $array['fees'];
@@ -712,7 +729,7 @@ class Cart
      *
      * @param mixed $identifier
      */
-    protected function deleteStoredCart($identifier)
+    protected function deleteStoredCart($identifier): void
     {
         $this
             ->getConnection()
@@ -816,7 +833,7 @@ class Cart
      *
      * @return \Illuminate\Database\Connection
      */
-    protected function getConnection()
+    protected function getConnection(): \Illuminate\Database\Connection
     {
         $connectionName = $this->getConnectionName();
 
@@ -828,7 +845,7 @@ class Cart
      *
      * @return string
      */
-    protected function getTableName()
+    protected function getTableName(): string
     {
         return config('cart.database.table', 'shoppingcart');
     }
@@ -838,7 +855,7 @@ class Cart
      *
      * @return string
      */
-    private function getConnectionName()
+    private function getConnectionName(): string
     {
         $connection = config('cart.database.connection');
 

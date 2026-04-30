@@ -37,7 +37,7 @@ class CartFee
      * @param string $thousandSeperator
      * @return string
      */
-    public function amountWithouTax($decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    public function amountWithouTax($decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
         $decimals = is_null($decimals) ? config('cart.format.fee_ex_tax_decimals') : $decimals;
 
@@ -52,9 +52,9 @@ class CartFee
      * @param string $thousandSeperator
      * @return string
      */
-    public function amountTax($decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    public function amountTax($decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
-        $priceTax = $this->amount + $this->tax;
+        $priceTax = $this->amount + $this->getRawTax();
         $decimals = is_null($decimals) ? config('cart.format.fee_inc_tax_decimals') : $decimals;
 
         return $this->numberFormat($priceTax, $decimals, $decimalPoint, $thousandSeperator);
@@ -68,7 +68,7 @@ class CartFee
      *
      * @return string
      */
-    public function getAmount($format = true, $withTax = false)
+    public function getAmount($format = true, $withTax = false): string
     {
         $total = $this->amount;
 
@@ -82,11 +82,19 @@ class CartFee
     /**
      * @return string
      */
-    public function tax()
+    public function tax(): string
     {
-        $tax = $this->amount * $this->taxRate / 100;
+        return $this->numberFormat($this->getRawTax());
+    }
 
-        return $this->numberFormat($tax);
+    /**
+     * Returns the raw (unformatted) fee tax as a float.
+     *
+     * @return float
+     */
+    public function getRawTax(): float
+    {
+        return $this->amount * $this->taxRate / 100;
     }
 
     /**
@@ -95,7 +103,7 @@ class CartFee
      * @param string $attribute
      * @return float|null
      */
-    public function __get($attribute)
+    public function __get($attribute): mixed
     {
         if (property_exists($this, $attribute)) {
             return $this->{$attribute};

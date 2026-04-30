@@ -16,7 +16,7 @@ trait CartHelper
      * @param $thousandSeperator
      * @return string
      */
-    private function numberFormat($value, $decimals = null, $decimalPoint = null, $thousandSeperator = null)
+    private function numberFormat($value, $decimals = null, $decimalPoint = null, $thousandSeperator = null): string
     {
         if (is_null($decimals)) {
             $decimals = is_null(config('cart.format.decimals')) ? 2 : config('cart.format.decimals');

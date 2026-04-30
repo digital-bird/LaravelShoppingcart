@@ -32,4 +32,13 @@ trait CartAssertions
 
         PHPUnit::assertCount($rows, $cart->content(), "Expected the cart to contain {$rows} rows, but got {$actual}.");
     }
+
+    protected function getPrivateProperty($object, $property)
+    {
+        $reflection = new \ReflectionClass($object);
+        $prop = $reflection->getProperty($property);
+        $prop->setAccessible(true);
+
+        return $prop->getValue($object);
+    }
 }

@@ -12,7 +12,7 @@ class CartItemOptions extends Collection
      * @param string $key
      * @return mixed
      */
-    public function __get($key)
+    public function __get($key): mixed
     {
         return $this->get($key);
     }
