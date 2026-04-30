@@ -1025,18 +1025,25 @@ class CartTest extends TestCase
     }
 
     #[\PHPUnit\Framework\Attributes\Test]
-    public function fees_rehydrate_from_the_session_when_content_is_loaded()
+    public function fees_rehydrate_on_a_fresh_cart_via_get_fee()
     {
         $cart = $this->getCart();
-
         $cart->addFee('shipping', 5.00, 0);
 
-        // getFee() does not trigger session rehydration on its own; loading
-        // content() does. This guards the rehydration path that store/restore relies on.
         $fresh = $this->getCart();
-        $fresh->content();
 
         $this->assertEquals(5.00, $fresh->getFee('shipping')->amount);
+    }
+
+    #[\PHPUnit\Framework\Attributes\Test]
+    public function fees_rehydrate_on_a_fresh_cart_via_get_fees()
+    {
+        $cart = $this->getCart();
+        $cart->addFee('shipping', 5.00, 0);
+
+        $fresh = $this->getCart();
+
+        $this->assertCount(1, $fresh->getFees());
     }
 
     #[\PHPUnit\Framework\Attributes\Test]
@@ -1092,6 +1099,27 @@ class CartTest extends TestCase
         $cart->addFee('shipping', 5.00, 21);
 
         $this->assertEquals(2.10, $cart->tax(2, '.', '', false));
+    }
+
+    #[\PHPUnit\Framework\Attributes\Test]
+    public function fee_total_respects_decimals_decimal_point_and_thousand_separator()
+    {
+        $cart = $this->getCart();
+        $cart->addFee('shipping', 1234.5, 0);
+
+        // Regression: feeTotal() previously dropped its formatting args.
+        $this->assertEquals('1.234,50', $cart->feeTotal(2, ',', '.', false));
+    }
+
+    #[\PHPUnit\Framework\Attributes\Test]
+    public function it_accepts_a_float_tax_rate_through_add()
+    {
+        $cart = $this->getCart();
+
+        // 8.5% is a real-world sales-tax rate. Previously is_int() rejected floats.
+        $cart->add(1, 'Item', 1, 100.00, 8.5);
+
+        $this->assertEquals(8.50, $cart->tax(2, '.', '', false));
     }
 
     #[\PHPUnit\Framework\Attributes\Test]

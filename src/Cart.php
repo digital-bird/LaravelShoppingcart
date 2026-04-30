@@ -594,6 +594,8 @@ class Cart
      */
     public function getFee($name): CartFee
     {
+        $this->getContent();
+
         return $this->fees->get($name, new CartFee(null, null));
     }
 
@@ -649,7 +651,9 @@ class Cart
      */
     public function feeTotal($decimals = null, $decimalPoint = null, $thousandSeperator = null, $withTax = true): string
     {
-        return $this->numberFormat($this->getRawFeeTotal($withTax), null, null, null);
+        $decimals = is_null($decimals) ? config('cart.format.fee_total_tax_decimals') : $decimals;
+
+        return $this->numberFormat($this->getRawFeeTotal($withTax), $decimals, $decimalPoint, $thousandSeperator);
     }
 
     /**
@@ -659,6 +663,8 @@ class Cart
      */
     public function getFees(): Collection
     {
+        $this->getContent();
+
         return $this->fees;
     }
 
@@ -792,7 +798,7 @@ class Cart
             $cartItem->setQuantity($qty);
         }
 
-        $taxRate = is_int($taxRate) ? $taxRate : config('cart.tax');
+        $taxRate = is_numeric($taxRate) ? $taxRate : config('cart.tax');
 
         $cartItem->setTaxRate($taxRate);
         $cartItem->setTaxIncluded($taxIncluded);

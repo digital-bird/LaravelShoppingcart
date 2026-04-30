@@ -41,7 +41,7 @@ class CartFee
     {
         $decimals = is_null($decimals) ? config('cart.format.fee_ex_tax_decimals') : $decimals;
 
-        return $this->numberFormat($this->price, $decimals, $decimalPoint, $thousandSeperator);
+        return $this->numberFormat($this->amount, $decimals, $decimalPoint, $thousandSeperator);
     }
 
     /**
@@ -73,7 +73,7 @@ class CartFee
         $total = $this->amount;
 
         if ($withTax) {
-            $total += $this->taxRate * $total;
+            $total += $this->getRawTax();
         }
 
         return $this->numberFormat($total);

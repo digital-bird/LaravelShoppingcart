@@ -127,4 +127,32 @@ class CartFeeTest extends TestCase
 
         $this->assertNull($options->missing);
     }
+
+    #[\PHPUnit\Framework\Attributes\Test]
+    public function amount_without_tax_returns_the_fee_amount()
+    {
+        $fee = new CartFee(12.34, 21);
+
+        // Regression: previously read $this->price (undefined) and always returned 0.
+        $this->assertEquals(12.34, $fee->amountWithouTax(2));
+        $this->assertEquals(12.34, $fee->amountWithouTax);
+    }
+
+    #[\PHPUnit\Framework\Attributes\Test]
+    public function get_amount_returns_the_fee_amount_when_tax_is_excluded()
+    {
+        $fee = new CartFee(10.00, 21);
+
+        $this->assertEquals(10.00, $fee->getAmount(true, false));
+    }
+
+    #[\PHPUnit\Framework\Attributes\Test]
+    public function get_amount_adds_tax_as_a_percentage_when_tax_is_included()
+    {
+        $fee = new CartFee(10.00, 21);
+
+        // Regression: previously computed amount + (taxRate * amount) = 220.
+        // Correct is amount + (amount * taxRate / 100) = 12.10.
+        $this->assertEquals(12.10, $fee->getAmount(true, true));
+    }
 }
